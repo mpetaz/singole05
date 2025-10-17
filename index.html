@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="it" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Singole base 0,5HT - Dashboard Analisi Mercati</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #e5e7eb; }
+        ::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .star-icon { cursor: pointer; transition: color 0.2s; }
+        .star-icon.favorited { color: #f59e0b; }
+        .star-icon:hover { color: #fde047; }
+        details[open] summary ~ * { animation: sweep .5s ease-in-out; }
+        @keyframes sweep {
+            0%    {opacity: 0; transform: translateY(-10px)}
+            100%  {opacity: 1; transform: translateY(0)}
+        }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] { -moz-appearance: textfield; }
+    </style>
+</head>
+<body class="text-gray-800 h-full flex flex-col antialiased">
+
+    <!-- Header -->
+    <header class="bg-white shadow-md sticky top-0 z-20">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <svg class="h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                    <span class="text-xl font-bold ml-3 text-gray-800">TIP Singole</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="app" class="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- Viste principali -->
+        <div id="loading-view" class="flex items-center justify-center h-full"><div class="text-center"><svg class="animate-spin h-12 w-12 text-indigo-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><p class="mt-4 text-lg text-gray-600">Connessione al database...</p></div></div>
+        
+        <div id="main-menu-view" class="hidden">
+            <div class="text-center max-w-2xl mx-auto mt-16">
+                <h1 class="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">Benvenuto</h1>
+                <p class="mt-6 text-lg leading-8 text-gray-600">Scegli un'opzione per iniziare a gestire, analizzare o prevedere i dati delle tue partite.</p>
+                <div class="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <button onclick="showView('db-management-view')" class="w-full rounded-md bg-indigo-600 px-6 py-3 text-lg font-semibold text-white shadow-sm hover:bg-indigo-500">Gestione Database</button>
+                    <button onclick="showView('dashboard-view')" class="w-full rounded-md bg-gray-700 px-6 py-3 text-lg font-semibold text-white shadow-sm hover:bg-gray-600">Dashboard Statistica</button>
+                    <button onclick="showView('predictions-view')" class="w-full rounded-md bg-green-600 px-6 py-3 text-lg font-semibold text-white shadow-sm hover:bg-green-500">Previsioni</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="db-management-view" class="hidden space-y-8"><button onclick="showView('main-menu-view')" class="flex items-center text-indigo-600 hover:text-indigo-500 mb-4">&larr; Torna al Menu</button><h2 class="text-3xl font-bold text-gray-900">Gestione Database</h2><div class="bg-white p-6 rounded-lg shadow-md"><h3 class="text-xl font-semibold mb-4 border-b pb-2">Carica Nuovo File CSV</h3><div class="grid grid-cols-1 md:grid-cols-3 gap-6"><div><label for="match-date" class="block text-sm font-medium text-gray-700">Data Partite</label><input type="date" id="match-date" class="mt-1 block w-full bg-gray-50 border-gray-300 rounded-md shadow-sm"></div><div><label for="original-tip" class="block text-sm font-medium text-gray-700">Tip Originale del File</label><select id="original-tip" class="mt-1 block w-full bg-gray-50 border-gray-300 rounded-md shadow-sm"><option>0,5HT</option><option>+1,5</option><option>+2,5</option><option>-1,5</option><option>-2,5</option><option>-3,5</option><option>1</option><option>2</option><option>X</option><option>1X</option><option>12</option><option>X2</option></select></div><div><label for="csv-file" class="block text-sm font-medium text-gray-700">File CSV</label><input type="file" id="csv-file" accept=".csv" class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"></div></div><div id="upload-summary" class="mt-4 text-gray-600"></div><div id="upload-controls" class="mt-4 hidden"><button id="confirm-upload-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-md">Conferma Caricamento</button></div></div><div class="bg-white p-6 rounded-lg shadow-md"><h3 class="text-xl font-semibold mb-4 border-b pb-2">Cancellazione Dati</h3><div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center"><div class="flex-grow w-full sm:w-auto"><label for="delete-date" class="block text-sm font-medium">Cancella per data</label><div class="flex gap-2 mt-1"><input type="date" id="delete-date" class="block w-full bg-gray-50 border-gray-300 rounded-md shadow-sm"><button id="delete-by-date-btn" class="bg-yellow-500 hover:bg-yellow-400 text-white font-bold py-2 px-4 rounded-md">Cancella</button></div></div><div class="pt-2 sm:pt-6"><button id="delete-all-btn" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-md w-full sm:w-auto">Azzera Database</button></div></div></div></div>
+
+        <!-- Dashboard Statistica -->
+        <div id="dashboard-view" class="hidden">
+            <div class="flex justify-between items-center mb-2"><button onclick="showView('main-menu-view')" class="flex items-center text-indigo-600 hover:text-indigo-500">&larr; Torna al Menu</button><h2 class="text-3xl font-bold text-gray-900">Dashboard Statistica</h2></div>
+            <div id="kpi-sticky-header" class="sticky top-[65px] bg-gray-100/95 backdrop-blur-sm py-4 z-10 rounded-lg shadow"><div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 text-center"><div class="bg-blue-100 p-4 rounded-lg"><div class="text-2xl font-bold text-blue-800" id="total-matches">0</div><div class="text-sm text-blue-600">Partite</div></div><div class="bg-green-100 p-4 rounded-lg"><div class="text-2xl font-bold text-green-800" id="won-matches">0</div><div class="text-sm text-green-600">Vinte</div></div><div class="bg-red-100 p-4 rounded-lg"><div class="text-2xl font-bold text-red-800" id="lost-matches">0</div><div class="text-sm text-red-600">Perse</div></div><div class="bg-yellow-100 p-4 rounded-lg"><div class="text-2xl font-bold text-yellow-800" id="draw-matches">0</div><div class="text-sm text-yellow-600">Pareggi</div></div><div class="bg-purple-100 p-4 rounded-lg"><div class="text-2xl font-bold text-purple-800" id="zero-zero-matches">0</div><div class="text-sm text-purple-600">Zero a Zero</div></div><div class="p-4 rounded-lg" id="win-rate-card"><div class="text-2xl font-bold" id="win-rate">0%</div><div class="text-sm" id="win-rate-label">Vinte/Perse</div></div><div class="p-4 rounded-lg bg-purple-100 hidden" id="win-rate-no-00-card"><div class="text-2xl font-bold text-purple-800" id="win-rate-no-00">0%</div><div class="text-sm text-purple-600">Winrate (no 0-0)</div></div></div></div>
+            <div class="space-y-6 mt-6">
+                <div class="bg-white p-4 rounded-lg shadow-md"><details open><summary class="text-xl font-semibold cursor-pointer text-gray-800">Filtri & Strategie</summary><div class="mt-4 flex flex-col gap-6 border-t pt-4"><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="space-y-4"><div><label class="font-medium text-gray-700">Periodo</label><div class="flex items-center gap-2 mt-1"><input type="date" id="start-date-filter" class="w-full bg-gray-50 border-gray-300 rounded-md text-sm p-2"><span>a</span><input type="date" id="end-date-filter" class="w-full bg-gray-50 border-gray-300 rounded-md text-sm p-2"></div></div><div><label for="tip-filter" class="font-medium text-gray-700">Tip da Analizzare</label><select id="tip-filter" class="mt-1 w-full bg-gray-50 border-gray-300 rounded-md text-sm p-2"></select></div></div><div class="space-y-4"><div><label class="font-medium text-gray-700">Probabilità (%)</label><div class="flex items-center gap-2 mt-1"><input type="number" id="prob-min-filter" placeholder="Da" class="w-full bg-gray-50 border-gray-300 rounded-md text-sm p-2"><span>a</span><input type="number" id="prob-max-filter" placeholder="A" class="w-full bg-gray-50 border-gray-300 rounded-md text-sm p-2"></div></div><div><label class="font-medium text-gray-700">Quota</label><div class="flex items-center gap-2 mt-1"><input type="number" id="odds-min-filter" step="0.01" placeholder="Da" class="w-full bg-gray-50 border-gray-300 rounded-md text-sm p-2"><span>a</span><input type="number" id="odds-max-filter" step="0.01" placeholder="A" class="w-full bg-gray-50 border-gray-300 rounded-md text-sm p-2"></div></div></div></div><div id="leagues-filter-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 pt-4 border-t"></div></div>
+                <div class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 border-t pt-4">
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <input type="text" id="strategy-name-input" placeholder="Nome della strategia" class="w-full sm:w-auto bg-gray-50 border-gray-300 rounded-md text-sm p-2">
+                        <button id="save-strategy-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-md text-sm">Salva</button>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <button id="reset-filters-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-md text-sm">Resetta Filtri</button>
+                        <button id="export-csv-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-md text-sm">Esporta CSV</button>
+                    </div>
+                </div>
+                <div id="saved-strategies-container" class="mt-4 pt-4 border-t"></div>
+                </details></div>
+                <div class="bg-white rounded-lg shadow-md overflow-hidden"><div class="p-4 border-b flex justify-between items-center"><h3 class="text-lg font-semibold">Elenco Partite Filtrate</h3><div class="text-sm text-gray-500">Trovate: <span id="filtered-count">0</span></div></div><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr><th class="px-4 py-3">Data</th><th class="px-4 py-3">Lega</th><th class="px-4 py-3">Partita</th><th class="px-4 py-3">Tip Orig.</th><th class="px-4 py-3 text-center">Risultato</th><th class="px-4 py-3 text-center">Prob. %</th><th class="px-4 py-3 text-center">Quota</th><th class="px-4 py-3 text-center">Esito Analisi</th></tr></thead><tbody id="matches-table-body" class="divide-y"></tbody></table><div id="no-matches-found" class="text-center py-10 text-gray-500 hidden">Nessuna partita trovata.</div></div></div>
+            </div>
+        </div>
+
+        <!-- Vista Previsioni -->
+        <div id="predictions-view" class="hidden space-y-8">
+            <button onclick="showView('main-menu-view')" class="flex items-center text-indigo-600 hover:text-indigo-500 mb-4">&larr; Torna al Menu</button>
+            <h2 class="text-3xl font-bold text-gray-900">Previsioni & Strategie</h2>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-4 border-b pb-2">1. Carica Partite Future</h3>
+                        <p class="text-sm text-gray-500 mb-4">Carica il file CSV con le partite da analizzare (senza risultato o esito).</p>
+                        <input type="file" id="csv-file-future" accept=".csv" class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
+                        <div id="future-upload-summary" class="mt-4 text-gray-600"></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h3 class="text-xl font-semibold mb-4 border-b pb-2">2. Applica Strategia</h3>
+                         <p class="text-sm text-gray-500 mb-4">Scegli una strategia salvata per filtrare le partite future caricate.</p>
+                         <label for="strategy-select" class="font-medium text-gray-700 text-sm">Strategia Salvata</label>
+                         <select id="strategy-select" class="mt-1 w-full bg-gray-50 border-gray-300 rounded-md text-sm p-2"></select>
+                         <button id="apply-strategy-btn" class="mt-4 w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-md">Applica Strategia</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow-md">
+                     <div class="p-4 border-b flex justify-between items-center"><h3 class="text-xl font-semibold">3. Partite Selezionate</h3><div class="text-sm text-gray-500">Trovate: <span id="predictions-count">0</span></div></div>
+                     <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr><th class="px-4 py-3">Lega</th><th class="px-4 py-3">Partita</th><th class="px-4 py-3 text-center">Prob. %</th><th class="px-4 py-3 text-center">Quota</th></tr></thead><tbody id="predictions-table-body" class="divide-y"></tbody></table><div id="no-predictions-found" class="text-center py-10 text-gray-500">Nessuna partita futura caricata o trovata.</div></div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modali e Toast -->
+    <div id="confirmation-modal" class="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center hidden"><div class="bg-white rounded-lg p-8 max-w-sm w-full shadow-xl"><h3 id="modal-title" class="text-xl font-bold mb-4">Sei sicuro?</h3><p id="modal-text" class="text-gray-600 mb-6">Questa azione è irreversibile.</p><div class="flex justify-end gap-4"><button id="modal-cancel-btn" class="px-4 py-2 rounded-md bg-gray-200 hover:bg-gray-300 font-semibold">Annulla</button><button id="modal-confirm-btn" class="px-4 py-2 rounded-md bg-red-600 hover:bg-red-500 text-white font-semibold">Conferma</button></div></div></div>
+    <div id="toast" class="fixed bottom-5 right-5 bg-green-600 text-white py-2 px-4 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300"><p id="toast-message"></p></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, collection, getDocs, writeBatch, query, where, onSnapshot, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        
+        // --- CONFIG & STATE ---
+        let app, db;
+        const userFirebaseConfig = {"apiKey":"AIzaSyAlUx-It07K_45SPLdaw6-Uj4Sc6kXn2V0","authDomain":"tip-singole.firebaseapp.com","projectId":"tip-singole","storageBucket":"tip-singole.firebasestorage.app","messagingSenderId":"585557835277","appId":"1:585557835277:web:535726a080a6031f241f44"};
+        let allMatches = [], matchesToUpload = [], futureMatches = [], currentView = 'loading-view', unsubscribe;
+        const DB_COLLECTION = 'matches', FAVORITES_KEY = 'tipSingole_favoriteLeagues', STRATEGIES_KEY = 'tipSingole_strategies';
+        const ALL_TIPS = ["0,5HT", "+1,5", "+2,5", "+3,5", "-1,5", "-2,5", "-3,5", "1", "X", "2", "1X", "12", "X2", "Gol", "No Gol", "Lay The Draw"];
+
+        // --- CORE APP LOGIC ---
+        const views = ['loading-view', 'main-menu-view', 'db-management-view', 'dashboard-view', 'predictions-view'];
+        window.showView = (viewId) => { currentView = viewId; views.forEach(id => document.getElementById(id)?.classList.toggle('hidden', id !== viewId)); if (viewId === 'dashboard-view') { updateFiltersUI(); applyAndRender(); renderSavedStrategies(); } if (viewId === 'predictions-view') { populateStrategyDropdown(); } }
+        function showToast(message, type = 'success') { const toast = document.getElementById('toast'), msg = document.getElementById('toast-message'); msg.textContent = message; toast.className = `fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg transform transition-all duration-300 ${type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-blue-600'}`; toast.classList.remove('translate-y-20', 'opacity-0'); setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000); }
+        async function fetchAllMatches() { if (!db) return; if (unsubscribe) unsubscribe(); unsubscribe = onSnapshot(collection(db, DB_COLLECTION), (snap) => { allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() })); if (currentView === 'dashboard-view') { updateFiltersUI(); applyAndRender(); } showView('main-menu-view'); }, (err) => { console.error(err); showToast("Errore caricamento dati", "error"); showView('main-menu-view'); }); }
+        
+        // --- DATABASE & CSV MANAGEMENT ---
+        async function addMatchesToDB(matches) { const batch = writeBatch(db); const colRef = collection(db, DB_COLLECTION); matches.forEach(match => { const newDocRef = doc(colRef); batch.set(newDocRef, match); }); try { await batch.commit(); showToast(`${matches.length} partite caricate!`, 'success'); } catch (e) { console.error(e); showToast("Errore caricamento.", "error"); } }
+        async function deleteByQuery(q) { try { const snap = await getDocs(q); const batch = writeBatch(db); let count = 0; snap.forEach(doc => { batch.delete(doc.ref); count++; }); if (count > 0) { await batch.commit(); showToast(`${count} partite cancellate.`, 'info'); } else { showToast("Nessuna partita trovata.", 'info'); } } catch (e) { console.error(e); showToast("Errore cancellazione.", "error"); } }
+        async function deleteAllMatches(){ await deleteByQuery(query(collection(db, DB_COLLECTION))); }
+        async function deleteMatchesByDate(date){ await deleteByQuery(query(collection(db, DB_COLLECTION), where("data", "==", date))); }
+        function handleFileUpload(event) { const file = event.target.files[0]; if (!file) return; const matchDate = document.getElementById('match-date').value, tip = document.getElementById('original-tip').value; if (!matchDate) { showToast("Seleziona una data.", "error"); event.target.value = ''; return; } Papa.parse(file, { header: true, skipEmptyLines: true, complete: (res) => processParsedData(res.data, matchDate, tip) }); }
+        function processParsedData(data, date, tip) { const summaryEl = document.getElementById('upload-summary'), controlsEl = document.getElementById('upload-controls'); let processed = [], incomplete = 0; data.forEach(row => { if (row.Lega && row.Partita && row.Risultato && row.Probabilità && row.Quota && row.Esito) { processed.push({ data: date, lega: row.Lega.trim(), partita: row.Partita.trim(), risultato: row.Risultato.trim(), probabilita: parseFloat(row.Probabilità), quota: parseFloat(row.Quota), esito: row.Esito.trim(), tip: tip }); } else { incomplete++; } }); const signatures = new Set(allMatches.map(m => `${m.data}-${m.partita}-${m.tip}`)); const uniqueNew = processed.filter(m => !signatures.has(`${m.data}-${m.partita}-${m.tip}`)); const duplicates = processed.length - uniqueNew.length; matchesToUpload = uniqueNew; let summary = `<p>Trovate ${data.length} righe.</p>`; if(incomplete > 0) summary += `<p class="text-yellow-500">${incomplete} scartate (incomplete).</p>`; if(duplicates > 0) summary += `<p class="text-yellow-500">${duplicates} scartate (duplicate).</p>`; summary += `<p class="font-bold text-green-600">Pronto per caricare ${matchesToUpload.length} partite.</p>`; summaryEl.innerHTML = summary; controlsEl.classList.toggle('hidden', matchesToUpload.length === 0); }
+        async function onConfirmUpload(){ if (matchesToUpload.length > 0) { await addMatchesToDB(matchesToUpload); matchesToUpload = []; document.getElementById('upload-summary').innerHTML = ''; document.getElementById('upload-controls').classList.add('hidden'); document.getElementById('csv-file').value = ''; } }
+        function exportToCSV() { const f = getActiveFilters(), m = filterMatches(allMatches, f); if(m.length===0){showToast("Nessun dato da esportare.","info");return} const t = f.tipToAnalyze || 'Originale', h = ['Data','Lega','Partita','Tip Orig.','Risultato','Prob. %','Quota',`Esito (${t})`], r = m.map(match => [match.data,`"${match.lega.replace(/"/g, '""')}"`,`"${match.partita.replace(/"/g, '""')}"`,match.tip,match.risultato,match.probabilita,match.quota,evaluateVirtualTip(match, f.tipToAnalyze)?'VINTA':'PERSA'].join(',')); const c = [h.join(','),...r].join('\n'), b = new Blob([c],{type:'text/csv;charset=utf-8;'}); const l = document.createElement("a"), u = URL.createObjectURL(b); l.setAttribute("href",u); l.setAttribute("download",`export_tips_${new Date().toISOString().slice(0,10)}.csv`); l.style.visibility='hidden'; document.body.appendChild(l); l.click(); document.body.removeChild(l); showToast("Esportazione completata!","success"); }
+
+        // --- FAVORITES & STRATEGIES LOGIC ---
+        const getFavorites = () => JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+        function toggleFavorite(event, leagueName) { let favs = getFavorites(); if (favs.includes(leagueName)) { favs = favs.filter(f => f !== leagueName); } else { favs.push(leagueName); } localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); event.currentTarget.classList.toggle('favorited');}
+        const getStrategies = () => JSON.parse(localStorage.getItem(STRATEGIES_KEY) || '[]');
+        function saveStrategy() { const name = document.getElementById('strategy-name-input').value.trim(); if (!name) { showToast("Inserisci un nome per la strategia.", "error"); return; } const strategies = getStrategies().filter(s => s.name !== name); strategies.push({ name: name, filters: getActiveFilters() }); localStorage.setItem(STRATEGIES_KEY, JSON.stringify(strategies)); showToast(`Strategia "${name}" salvata!`, 'success'); document.getElementById('strategy-name-input').value = ''; renderSavedStrategies(); }
+        function deleteStrategy(name) { const strategies = getStrategies().filter(s => s.name !== name); localStorage.setItem(STRATEGIES_KEY, JSON.stringify(strategies)); showToast(`Strategia "${name}" cancellata.`, 'info'); renderSavedStrategies(); }
+        
+        function applyStrategyToDashboard(name) {
+            const strategy = getStrategies().find(s => s.name === name);
+            if (!strategy) { showToast("Strategia non trovata.", "error"); return; }
+            const { filters } = strategy;
+            document.getElementById('start-date-filter').value = filters.startDate || '';
+            document.getElementById('end-date-filter').value = filters.endDate || '';
+            document.getElementById('tip-filter').value = filters.tipToAnalyze || '';
+            document.getElementById('prob-min-filter').value = filters.probMin || '';
+            document.getElementById('prob-max-filter').value = filters.probMax || '';
+            document.getElementById('odds-min-filter').value = filters.oddsMin || '';
+            document.getElementById('odds-max-filter').value = filters.oddsMax || '';
+
+            document.querySelectorAll('#leagues-filter-container input[type="checkbox"]').forEach(cb => cb.checked = false);
+            if (filters.leagues && filters.leagues.length > 0) {
+                filters.leagues.forEach(league => {
+                    const checkbox = document.querySelector(`#leagues-filter-container input[value="${league}"]`);
+                    if (checkbox) checkbox.checked = true;
+                });
+            }
+            applyAndRender();
+            showToast(`Strategia "${name}" applicata!`, 'success');
+        }
+
+        function renderSavedStrategies() { 
+            const container = document.getElementById('saved-strategies-container'); 
+            const strategies = getStrategies(); 
+            if(strategies.length === 0) { container.innerHTML = ''; return; } 
+            container.innerHTML = `<h3 class="text-lg font-semibold mb-2">Strategie Salate</h3><div class="space-y-2">${strategies.map(s => `<div class="flex justify-between items-center bg-gray-50 p-2 rounded-md text-sm"><span class="font-medium text-gray-700">${s.name}</span><div class="flex items-center gap-2"><button data-strategy-name="${s.name}" class="apply-strategy-btn text-indigo-600 hover:text-indigo-800 font-bold">Applica</button><button data-strategy-name="${s.name}" class="delete-strategy-btn text-red-500 hover:text-red-700 font-bold">Cancella</button></div></div>`).join('')}</div>`; 
+            document.querySelectorAll('.delete-strategy-btn').forEach(btn => btn.addEventListener('click', (e) => deleteStrategy(e.target.dataset.strategyName)));
+            document.querySelectorAll('.apply-strategy-btn').forEach(btn => btn.addEventListener('click', (e) => applyStrategyToDashboard(e.target.dataset.strategyName)));
+        }
+
+        // --- VIRTUAL TIP EVALUATOR ---
+        function evaluateVirtualTip(match, tipToAnalyze) {
+            if (!tipToAnalyze) { return match.esito.toUpperCase() === 'VINTA'; }
+            const [home, away] = match.risultato.trim().split('-').map(Number);
+            if (isNaN(home) || isNaN(away)) return false; 
+            const total = home + away;
+            switch (tipToAnalyze) {
+                case '1': return home > away; case 'X': return home === away; case '2': return away > home;
+                case '1X': return home >= away; case 'X2': return away >= home; case '12': return home !== away;
+                case 'Lay The Draw': return home !== away;
+                case '+1,5': return total > 1.5; case '+2,5': return total > 2.5; case '+3,5': return total > 3.5;
+                case '-1,5': return total < 1.5; case '-2,5': return total < 2.5; case '-3,5': return total < 3.5;
+                case 'Gol': return home > 0 && away > 0; case 'No Gol': return home === 0 || away === 0;
+                case '0,5HT': return match.esito.toUpperCase() === 'VINTA';
+                default: return match.esito.toUpperCase() === 'VINTA';
+            }
+        }
+
+        // --- DASHBOARD LOGIC ---
+        function applyAndRender() { const filters = getActiveFilters(); const filtered = filterMatches(allMatches, filters); updateKPIs(filtered, filters.tipToAnalyze); renderMatchesTable(filtered, filters.tipToAnalyze); document.getElementById('filtered-count').textContent = filtered.length; }
+        function getActiveFilters() { return { startDate: document.getElementById('start-date-filter').value, endDate: document.getElementById('end-date-filter').value, probMin: parseFloat(document.getElementById('prob-min-filter').value) || 0, probMax: parseFloat(document.getElementById('prob-max-filter').value) || 100, oddsMin: parseFloat(document.getElementById('odds-min-filter').value) || 0, oddsMax: parseFloat(document.getElementById('odds-max-filter').value) || 999, leagues: Array.from(document.querySelectorAll('#leagues-filter-container input:checked:not(.select-all-leagues)')).map(el => el.value), tipToAnalyze: document.getElementById('tip-filter').value }; }
+        function filterMatches(matches, filters) { return matches.filter(m => { if (filters.startDate && m.data < filters.startDate) return false; if (filters.endDate && m.data > filters.endDate) return false; if (m.probabilita < filters.probMin || m.probabilita > filters.probMax) return false; if (m.quota < filters.oddsMin || m.quota > filters.oddsMax) return false; if (filters.leagues.length > 0 && !filters.leagues.includes(m.lega)) return false; return true; }); }
+        
+        function updateKPIs(matches, tipToAnalyze) {
+            let won = 0;
+            const isVirtual = tipToAnalyze !== "";
+            matches.forEach(m => { if (evaluateVirtualTip(m, tipToAnalyze)) won++; });
+            
+            const total = matches.length, lost = total - won;
+            const drawCount = matches.filter(m => {
+                const [home, away] = m.risultato.trim().split('-').map(Number);
+                return !isNaN(home) && !isNaN(away) && home === away;
+            }).length;
+            const zeroZero = matches.filter(m => m.risultato.trim() === '0-0').length;
+            const winRate = total > 0 ? (won / total * 100) : 0;
+            
+            document.getElementById('total-matches').textContent = total;
+            document.getElementById('won-matches').textContent = won;
+            document.getElementById('lost-matches').textContent = lost;
+            document.getElementById('draw-matches').textContent = drawCount;
+            document.getElementById('zero-zero-matches').textContent = zeroZero;
+            document.getElementById('win-rate').textContent = `${winRate.toFixed(1)}%`;
+            
+            const winRateNo00Card = document.getElementById('win-rate-no-00-card');
+            if (tipToAnalyze === '0,5HT') {
+                winRateNo00Card.classList.remove('hidden');
+                const non00 = matches.filter(m => m.risultato.trim() !== '0-0');
+                const wonNon00 = non00.filter(m => evaluateVirtualTip(m, '0,5HT')).length;
+                const wrNo00 = non00.length > 0 ? (wonNon00 / non00.length * 100) : 0;
+                document.getElementById('win-rate-no-00').textContent = `${wrNo00.toFixed(1)}%`;
+            } else {
+                winRateNo00Card.classList.add('hidden');
+            }
+        }
+
+        function renderMatchesTable(matches, tipToAnalyze) {
+            const tbody = document.getElementById('matches-table-body'), noMatchesEl = document.getElementById('no-matches-found');
+            noMatchesEl.classList.toggle('hidden', matches.length > 0);
+            if(matches.length === 0) { tbody.innerHTML = ''; return; }
+            matches.sort((a, b) => b.data.localeCompare(a.data));
+            tbody.innerHTML = matches.map(m => {
+                const isWin = evaluateVirtualTip(m, tipToAnalyze);
+                return `<tr class="hover:bg-gray-50"><td class="px-4 py-2">${m.data}</td><td class="px-4 py-2 text-gray-500">${m.lega}</td><td class="px-4 py-2 font-medium">${m.partita}</td><td class="px-4 py-2 text-gray-400">${m.tip}</td><td class="px-4 py-2 text-center">${m.risultato}</td><td class="px-4 py-2 text-center">${m.probabilita.toFixed(0)}%</td><td class="px-4 py-2 text-center">${m.quota.toFixed(2)}</td><td class="px-4 py-2 text-center"><span class="px-2 py-1 text-xs font-semibold rounded-full ${isWin ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${isWin ? 'VINTA' : 'PERSA'}</span></td></tr>`;
+            }).join('');
+        }
+        
+        // --- UI & FILTERS SETUP ---
+        const continentMap = { 'EU': 'Europa', 'AS': 'Asia', 'AF': 'Africa', 'SA': 'Sud America', 'NA': 'Nord America', 'AU': 'Oceania' };
+        function updateFiltersUI() {
+            const container = document.getElementById('leagues-filter-container'); if (!container || allMatches.length === 0) return;
+            const favorites = getFavorites(); const allUniqueLeagues = [...new Set(allMatches.map(m => m.lega))]; const nonFavoriteLeagues = allUniqueLeagues.filter(l => !favorites.includes(l));
+            const grouped = nonFavoriteLeagues.sort().reduce((acc, l) => { const pre = l.split('-')[0].trim().toUpperCase(); const cont = continentMap[pre] || 'Altro'; if (!acc[cont]) acc[cont] = []; acc[cont].push(l); return acc; }, {});
+            const groupId_favs = "favorites"; let leaguesHTML = `<div class="space-y-2"><div class="flex items-center justify-between"><h4 class="font-semibold text-gray-700">Preferiti</h4><div class="flex items-center gap-2"><button id="update-favorites-btn" class="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2 py-1 rounded hover:bg-indigo-200">Aggiorna</button><label class="flex items-center text-xs text-indigo-600 cursor-pointer hover:underline"><input type="checkbox" class="select-all-leagues h-4 w-4 rounded" data-group="${groupId_favs}"><span class="ml-1">Tutti</span></label></div></div><div class="space-y-1 h-56 overflow-y-auto pr-2" data-group-container="${groupId_favs}">${favorites.length>0?favorites.sort().map(l=>renderLeagueCheckbox(l)).join(''):`<p class="text-xs text-gray-400">Aggiungi leghe con la stella.</p>`}</div></div>`;
+            ['Europa', 'Sud America', 'Asia', 'Africa', 'Nord America', 'Oceania', 'Altro'].forEach(cont => { if (grouped[cont]) { const groupId = cont.replace(/\s+/g, '-'); leaguesHTML += `<details class="space-y-2" open><summary class="font-semibold text-gray-700 cursor-pointer flex items-center justify-between"><span>${cont}</span><label class="flex items-center text-xs text-indigo-600 cursor-pointer hover:underline" onclick="event.stopPropagation()"><input type="checkbox" class="select-all-leagues h-4 w-4 rounded" data-group="${groupId}"><span class="ml-1">Tutti</span></label></summary><div class="space-y-1 h-56 overflow-y-auto pr-2 border-t mt-2 pt-2" data-group-container="${groupId}">${grouped[cont].map(l => renderLeagueCheckbox(l)).join('')}</div></details>`; } });
+            container.innerHTML = leaguesHTML; const tipFilterEl = document.getElementById('tip-filter'); const currentTip = tipFilterEl.value; tipFilterEl.innerHTML = '<option value="">Tip Originale</option>' + ALL_TIPS.map(tip => `<option value="${tip}" ${tip === currentTip ? 'selected' : ''}>${tip}</option>`).join('');
+            document.getElementById('update-favorites-btn').addEventListener('click', () => { updateFiltersUI(); applyAndRender(); });
+            container.querySelectorAll('input[type="checkbox"]:not(.select-all-leagues)').forEach(el => el.addEventListener('change', applyAndRender));
+            container.querySelectorAll('.select-all-leagues').forEach(cb => { cb.addEventListener('change', (e) => { const group = e.target.dataset.group; const isChecked = e.target.checked; container.querySelectorAll(`[data-group-container="${group}"] input[type="checkbox"]`).forEach(leagueCb => leagueCb.checked = isChecked); applyAndRender(); }); });
+            container.querySelectorAll('.star-icon').forEach(el => el.addEventListener('click', (e) => toggleFavorite(e, e.currentTarget.dataset.league)));
+        }
+        function renderLeagueCheckbox(league) { const isFav = getFavorites().includes(league); return `<div class="flex items-center justify-between"><div class="flex items-center"><input id="l_${league}" type="checkbox" value="${league}" class="h-4 w-4 rounded border-gray-300 text-indigo-600"><label for="l_${league}" class="ml-2 text-sm text-gray-600">${league}</label></div><svg data-league="${league}" class="star-icon w-5 h-5 text-gray-400 ${isFav ? 'favorited' : ''}" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg></div>`; }
+        function resetFilters() { ['start-date-filter','end-date-filter','tip-filter','prob-min-filter','prob-max-filter','odds-min-filter','odds-max-filter'].forEach(id => document.getElementById(id).value = ''); document.querySelectorAll('#leagues-filter-container input:checked').forEach(el => el.checked = false); applyAndRender(); }
+        
+        // --- PREDICTIONS LOGIC ---
+        function handleFutureFileUpload(event) {
+            const file = event.target.files[0]; if (!file) return;
+            Papa.parse(file, { header: true, skipEmptyLines: true,
+                complete: (results) => {
+                    futureMatches = results.data.filter(r => r.Lega && r.Partita && r.Probabilità && r.Quota).map(r => ({ lega: r.Lega.trim(), partita: r.Partita.trim(), probabilita: parseFloat(r.Probabilità), quota: parseFloat(r.Quota) }));
+                    document.getElementById('future-upload-summary').innerHTML = `<p class="text-green-600 font-bold">${futureMatches.length} partite future caricate.</p>`;
+                    document.getElementById('predictions-table-body').innerHTML = '';
+                    document.getElementById('predictions-count').textContent = '0';
+                }
+            });
+        }
+        function populateStrategyDropdown() {
+            const select = document.getElementById('strategy-select');
+            const strategies = getStrategies();
+            select.innerHTML = '<option value="">Scegli una strategia...</option>' + strategies.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+        }
+        function applyStrategy() {
+            const strategyName = document.getElementById('strategy-select').value;
+            if (!strategyName) { showToast("Scegli una strategia dall'elenco.", "error"); return; }
+            if (futureMatches.length === 0) { showToast("Carica prima un file di partite future.", "error"); return; }
+            const strategy = getStrategies().find(s => s.name === strategyName);
+            if (!strategy) { showToast("Strategia non trovata.", "error"); return; }
+
+            const filters = strategy.filters;
+            const predictedMatches = futureMatches.filter(m => {
+                if (m.probabilita < filters.probMin || m.probabilita > filters.probMax) return false;
+                if (m.quota < filters.oddsMin || m.quota > filters.oddsMax) return false;
+                if (filters.leagues.length > 0 && !filters.leagues.includes(m.lega)) return false;
+                return true;
+            });
+
+            const tbody = document.getElementById('predictions-table-body'), noPredEl = document.getElementById('no-predictions-found');
+            document.getElementById('predictions-count').textContent = predictedMatches.length;
+            noPredEl.classList.toggle('hidden', predictedMatches.length > 0);
+            if (predictedMatches.length > 0) { tbody.innerHTML = predictedMatches.map(m => `<tr class="hover:bg-gray-50"><td class="px-4 py-2 text-gray-500">${m.lega}</td><td class="px-4 py-2 font-medium">${m.partita}</td><td class="px-4 py-2 text-center">${m.probabilita.toFixed(0)}%</td><td class="px-4 py-2 text-center">${m.quota.toFixed(2)}</td></tr>`).join('');
+            } else { tbody.innerHTML = ''; }
+        }
+
+        // --- EVENT LISTENERS & INIT ---
+        let confirmCallback=null;const modal=document.getElementById("confirmation-modal");function showConfirmationModal(title,text,onConfirm){document.getElementById("modal-title").textContent=title;document.getElementById("modal-text").textContent=text;confirmCallback=onConfirm;modal.classList.remove("hidden")}document.getElementById("modal-cancel-btn").addEventListener("click",()=>{modal.classList.add("hidden");confirmCallback=null});document.getElementById("modal-confirm-btn").addEventListener("click",()=>{if(confirmCallback){confirmCallback()}modal.classList.add("hidden");confirmCallback=null});
+        function runAppLogic() { 
+            const yesterday=new Date(); yesterday.setDate(yesterday.getDate()-1); document.getElementById('match-date').value=yesterday.toISOString().split('T')[0];
+            document.getElementById('csv-file').addEventListener('change',handleFileUpload);
+            document.getElementById('confirm-upload-btn').addEventListener('click',onConfirmUpload);
+            document.getElementById('delete-all-btn').addEventListener('click',()=>showConfirmationModal('Azzerare Database?','Stai per cancellare TUTTE le partite.',deleteAllMatches));
+            document.getElementById('delete-by-date-btn').addEventListener('click',()=>{const d=document.getElementById('delete-date').value;if(!d)return;showConfirmationModal(`Cancellare partite del ${d}?`, '', ()=>deleteMatchesByDate(d))});
+            ['tip-filter','prob-min-filter','prob-max-filter','odds-min-filter','odds-max-filter','start-date-filter','end-date-filter'].forEach(id => document.getElementById(id).addEventListener('input', applyAndRender));
+            document.getElementById('reset-filters-btn').addEventListener('click',resetFilters);
+            document.getElementById('export-csv-btn').addEventListener('click', exportToCSV);
+            document.getElementById('save-strategy-btn').addEventListener('click', saveStrategy);
+            document.getElementById('csv-file-future').addEventListener('change', handleFutureFileUpload);
+            document.getElementById('apply-strategy-btn').addEventListener('click', applyStrategy);
+            fetchAllMatches();
+        }
+        function initializeFirebase() { try { const config = (window.__firebase_config?.projectId) ? (typeof window.__firebase_config === 'string' ? JSON.parse(window.__firebase_config) : window.__firebase_config) : userFirebaseConfig; if (!config || !config.projectId) throw new Error("Config Firebase non valida."); app = initializeApp(config); db = getFirestore(app); runAppLogic(); } catch (e) { console.error(e); document.getElementById('loading-view').innerHTML = `<div class="text-center text-red-500"><h1 class="text-2xl">Errore Configurazione</h1><p>Impossibile connettersi al DB.<br>Messaggio: ${e.message}</p></div>`; } }
+        document.addEventListener('DOMContentLoaded', initializeFirebase);
+    </script>
+</body>
+</html>
+
