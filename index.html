@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Singole base 0,5HT - Dashboard Analisi Mercati</title>
+    <title>TIP Singole - Dashboard Analisi Mercati</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -123,40 +123,92 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, collection, getDocs, writeBatch, query, where, onSnapshot, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, writeBatch, query, where, onSnapshot, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
         
         // --- CONFIG & STATE ---
         let app, db;
         const userFirebaseConfig = {"apiKey":"AIzaSyAlUx-It07K_45SPLdaw6-Uj4Sc6kXn2V0","authDomain":"tip-singole.firebaseapp.com","projectId":"tip-singole","storageBucket":"tip-singole.firebasestorage.app","messagingSenderId":"585557835277","appId":"1:585557835277:web:535726a080a6031f241f44"};
-        let allMatches = [], matchesToUpload = [], futureMatches = [], currentView = 'loading-view', unsubscribe;
-        const DB_COLLECTION = 'matches', FAVORITES_KEY = 'tipSingole_favoriteLeagues', STRATEGIES_KEY = 'tipSingole_strategies';
+        let allMatches = [], matchesToUpload = [], futureMatches = [], currentView = 'loading-view', unsubscribeMatches, unsubscribePrefs;
+        let userPreferences = { favorites: [], strategies: [] };
+        const DB_MATCHES_COLLECTION = 'matches', DB_PREFS_COLLECTION = 'preferences', PREFS_DOC_ID = 'user_settings';
         const ALL_TIPS = ["0,5HT", "+1,5", "+2,5", "+3,5", "-1,5", "-2,5", "-3,5", "1", "X", "2", "1X", "12", "X2", "Gol", "No Gol", "Lay The Draw"];
 
         // --- CORE APP LOGIC ---
         const views = ['loading-view', 'main-menu-view', 'db-management-view', 'dashboard-view', 'predictions-view'];
         window.showView = (viewId) => { currentView = viewId; views.forEach(id => document.getElementById(id)?.classList.toggle('hidden', id !== viewId)); if (viewId === 'dashboard-view') { updateFiltersUI(); applyAndRender(); renderSavedStrategies(); } if (viewId === 'predictions-view') { populateStrategyDropdown(); } }
         function showToast(message, type = 'success') { const toast = document.getElementById('toast'), msg = document.getElementById('toast-message'); msg.textContent = message; toast.className = `fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg transform transition-all duration-300 ${type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-blue-600'}`; toast.classList.remove('translate-y-20', 'opacity-0'); setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000); }
-        async function fetchAllMatches() { if (!db) return; if (unsubscribe) unsubscribe(); unsubscribe = onSnapshot(collection(db, DB_COLLECTION), (snap) => { allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() })); if (currentView === 'dashboard-view') { updateFiltersUI(); applyAndRender(); } showView('main-menu-view'); }, (err) => { console.error(err); showToast("Errore caricamento dati", "error"); showView('main-menu-view'); }); }
+        
+        async function fetchAllData() {
+            if (!db) return;
+            // Listener for matches
+            if (unsubscribeMatches) unsubscribeMatches();
+            unsubscribeMatches = onSnapshot(collection(db, DB_MATCHES_COLLECTION), (snap) => { 
+                allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() })); 
+                if (currentView === 'dashboard-view') { 
+                    updateFiltersUI(); 
+                    applyAndRender(); 
+                }
+                showView('main-menu-view'); 
+            }, (err) => { console.error("Match fetch error:", err); showToast("Errore caricamento partite", "error"); showView('main-menu-view'); });
+
+            // Listener for preferences
+            if(unsubscribePrefs) unsubscribePrefs();
+            const prefsDocRef = doc(db, DB_PREFS_COLLECTION, PREFS_DOC_ID);
+            const docSnap = await getDoc(prefsDocRef);
+            if (!docSnap.exists()) {
+                await setDoc(prefsDocRef, { favorites: [], strategies: [] });
+            }
+            unsubscribePrefs = onSnapshot(prefsDocRef, (doc) => {
+                userPreferences = doc.data() || { favorites: [], strategies: [] };
+                if (currentView === 'dashboard-view') {
+                    updateFiltersUI();
+                    renderSavedStrategies();
+                }
+            });
+        }
         
         // --- DATABASE & CSV MANAGEMENT ---
-        async function addMatchesToDB(matches) { const batch = writeBatch(db); const colRef = collection(db, DB_COLLECTION); matches.forEach(match => { const newDocRef = doc(colRef); batch.set(newDocRef, match); }); try { await batch.commit(); showToast(`${matches.length} partite caricate!`, 'success'); } catch (e) { console.error(e); showToast("Errore caricamento.", "error"); } }
+        async function addMatchesToDB(matches) { const batch = writeBatch(db); const colRef = collection(db, DB_MATCHES_COLLECTION); matches.forEach(match => { const newDocRef = doc(colRef); batch.set(newDocRef, match); }); try { await batch.commit(); showToast(`${matches.length} partite caricate!`, 'success'); } catch (e) { console.error(e); showToast("Errore caricamento.", "error"); } }
         async function deleteByQuery(q) { try { const snap = await getDocs(q); const batch = writeBatch(db); let count = 0; snap.forEach(doc => { batch.delete(doc.ref); count++; }); if (count > 0) { await batch.commit(); showToast(`${count} partite cancellate.`, 'info'); } else { showToast("Nessuna partita trovata.", 'info'); } } catch (e) { console.error(e); showToast("Errore cancellazione.", "error"); } }
-        async function deleteAllMatches(){ await deleteByQuery(query(collection(db, DB_COLLECTION))); }
-        async function deleteMatchesByDate(date){ await deleteByQuery(query(collection(db, DB_COLLECTION), where("data", "==", date))); }
+        async function deleteAllMatches(){ await deleteByQuery(query(collection(db, DB_MATCHES_COLLECTION))); }
+        async function deleteMatchesByDate(date){ await deleteByQuery(query(collection(db, DB_MATCHES_COLLECTION), where("data", "==", date))); }
         function handleFileUpload(event) { const file = event.target.files[0]; if (!file) return; const matchDate = document.getElementById('match-date').value, tip = document.getElementById('original-tip').value; if (!matchDate) { showToast("Seleziona una data.", "error"); event.target.value = ''; return; } Papa.parse(file, { header: true, skipEmptyLines: true, complete: (res) => processParsedData(res.data, matchDate, tip) }); }
         function processParsedData(data, date, tip) { const summaryEl = document.getElementById('upload-summary'), controlsEl = document.getElementById('upload-controls'); let processed = [], incomplete = 0; data.forEach(row => { if (row.Lega && row.Partita && row.Risultato && row.Probabilità && row.Quota && row.Esito) { processed.push({ data: date, lega: row.Lega.trim(), partita: row.Partita.trim(), risultato: row.Risultato.trim(), probabilita: parseFloat(row.Probabilità), quota: parseFloat(row.Quota), esito: row.Esito.trim(), tip: tip }); } else { incomplete++; } }); const signatures = new Set(allMatches.map(m => `${m.data}-${m.partita}-${m.tip}`)); const uniqueNew = processed.filter(m => !signatures.has(`${m.data}-${m.partita}-${m.tip}`)); const duplicates = processed.length - uniqueNew.length; matchesToUpload = uniqueNew; let summary = `<p>Trovate ${data.length} righe.</p>`; if(incomplete > 0) summary += `<p class="text-yellow-500">${incomplete} scartate (incomplete).</p>`; if(duplicates > 0) summary += `<p class="text-yellow-500">${duplicates} scartate (duplicate).</p>`; summary += `<p class="font-bold text-green-600">Pronto per caricare ${matchesToUpload.length} partite.</p>`; summaryEl.innerHTML = summary; controlsEl.classList.toggle('hidden', matchesToUpload.length === 0); }
         async function onConfirmUpload(){ if (matchesToUpload.length > 0) { await addMatchesToDB(matchesToUpload); matchesToUpload = []; document.getElementById('upload-summary').innerHTML = ''; document.getElementById('upload-controls').classList.add('hidden'); document.getElementById('csv-file').value = ''; } }
         function exportToCSV() { const f = getActiveFilters(), m = filterMatches(allMatches, f); if(m.length===0){showToast("Nessun dato da esportare.","info");return} const t = f.tipToAnalyze || 'Originale', h = ['Data','Lega','Partita','Tip Orig.','Risultato','Prob. %','Quota',`Esito (${t})`], r = m.map(match => [match.data,`"${match.lega.replace(/"/g, '""')}"`,`"${match.partita.replace(/"/g, '""')}"`,match.tip,match.risultato,match.probabilita,match.quota,evaluateVirtualTip(match, f.tipToAnalyze)?'VINTA':'PERSA'].join(',')); const c = [h.join(','),...r].join('\n'), b = new Blob([c],{type:'text/csv;charset=utf-8;'}); const l = document.createElement("a"), u = URL.createObjectURL(b); l.setAttribute("href",u); l.setAttribute("download",`export_tips_${new Date().toISOString().slice(0,10)}.csv`); l.style.visibility='hidden'; document.body.appendChild(l); l.click(); document.body.removeChild(l); showToast("Esportazione completata!","success"); }
 
         // --- FAVORITES & STRATEGIES LOGIC ---
-        const getFavorites = () => JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-        function toggleFavorite(event, leagueName) { let favs = getFavorites(); if (favs.includes(leagueName)) { favs = favs.filter(f => f !== leagueName); } else { favs.push(leagueName); } localStorage.setItem(FAVORITES_KEY, JSON.stringify(favs)); event.currentTarget.classList.toggle('favorited');}
-        const getStrategies = () => JSON.parse(localStorage.getItem(STRATEGIES_KEY) || '[]');
-        function saveStrategy() { const name = document.getElementById('strategy-name-input').value.trim(); if (!name) { showToast("Inserisci un nome per la strategia.", "error"); return; } const strategies = getStrategies().filter(s => s.name !== name); strategies.push({ name: name, filters: getActiveFilters() }); localStorage.setItem(STRATEGIES_KEY, JSON.stringify(strategies)); showToast(`Strategia "${name}" salvata!`, 'success'); document.getElementById('strategy-name-input').value = ''; renderSavedStrategies(); }
-        function deleteStrategy(name) { const strategies = getStrategies().filter(s => s.name !== name); localStorage.setItem(STRATEGIES_KEY, JSON.stringify(strategies)); showToast(`Strategia "${name}" cancellata.`, 'info'); renderSavedStrategies(); }
+        async function updatePreferences(data) {
+            const prefsDocRef = doc(db, DB_PREFS_COLLECTION, PREFS_DOC_ID);
+            await setDoc(prefsDocRef, data, { merge: true });
+        }
+        async function toggleFavorite(event, leagueName) { 
+            let favs = [...(userPreferences.favorites || [])];
+            if (favs.includes(leagueName)) { 
+                favs = favs.filter(f => f !== leagueName); 
+            } else { 
+                favs.push(leagueName); 
+            }
+            event.currentTarget.classList.toggle('favorited'); // Immediate UI feedback
+            await updatePreferences({ favorites: favs });
+        }
+        async function saveStrategy() { 
+            const name = document.getElementById('strategy-name-input').value.trim(); 
+            if (!name) { showToast("Inserisci un nome per la strategia.", "error"); return; }
+            const strategies = [...(userPreferences.strategies || [])].filter(s => s.name !== name);
+            strategies.push({ name: name, filters: getActiveFilters() }); 
+            await updatePreferences({ strategies: strategies });
+            showToast(`Strategia "${name}" salvata!`, 'success'); 
+            document.getElementById('strategy-name-input').value = ''; 
+        }
+        async function deleteStrategy(name) { 
+            const strategies = userPreferences.strategies.filter(s => s.name !== name); 
+            await updatePreferences({ strategies: strategies });
+            showToast(`Strategia "${name}" cancellata.`, 'info'); 
+        }
         
         function applyStrategyToDashboard(name) {
-            const strategy = getStrategies().find(s => s.name === name);
+            const strategy = userPreferences.strategies.find(s => s.name === name);
             if (!strategy) { showToast("Strategia non trovata.", "error"); return; }
             const { filters } = strategy;
             document.getElementById('start-date-filter').value = filters.startDate || '';
@@ -180,7 +232,7 @@
 
         function renderSavedStrategies() { 
             const container = document.getElementById('saved-strategies-container'); 
-            const strategies = getStrategies(); 
+            const strategies = userPreferences.strategies || []; 
             if(strategies.length === 0) { container.innerHTML = ''; return; } 
             container.innerHTML = `<h3 class="text-lg font-semibold mb-2">Strategie Salate</h3><div class="space-y-2">${strategies.map(s => `<div class="flex justify-between items-center bg-gray-50 p-2 rounded-md text-sm"><span class="font-medium text-gray-700">${s.name}</span><div class="flex items-center gap-2"><button data-strategy-name="${s.name}" class="apply-strategy-btn text-indigo-600 hover:text-indigo-800 font-bold">Applica</button><button data-strategy-name="${s.name}" class="delete-strategy-btn text-red-500 hover:text-red-700 font-bold">Cancella</button></div></div>`).join('')}</div>`; 
             document.querySelectorAll('.delete-strategy-btn').forEach(btn => btn.addEventListener('click', (e) => deleteStrategy(e.target.dataset.strategyName)));
@@ -212,52 +264,28 @@
         
         function updateKPIs(matches, tipToAnalyze) {
             let won = 0;
-            const isVirtual = tipToAnalyze !== "";
             matches.forEach(m => { if (evaluateVirtualTip(m, tipToAnalyze)) won++; });
-            
             const total = matches.length, lost = total - won;
-            const drawCount = matches.filter(m => {
-                const [home, away] = m.risultato.trim().split('-').map(Number);
-                return !isNaN(home) && !isNaN(away) && home === away;
-            }).length;
+            const drawCount = matches.filter(m => { const [h, a] = m.risultato.trim().split('-').map(Number); return !isNaN(h) && !isNaN(a) && h === a; }).length;
             const zeroZero = matches.filter(m => m.risultato.trim() === '0-0').length;
             const winRate = total > 0 ? (won / total * 100) : 0;
-            
-            document.getElementById('total-matches').textContent = total;
-            document.getElementById('won-matches').textContent = won;
-            document.getElementById('lost-matches').textContent = lost;
-            document.getElementById('draw-matches').textContent = drawCount;
-            document.getElementById('zero-zero-matches').textContent = zeroZero;
-            document.getElementById('win-rate').textContent = `${winRate.toFixed(1)}%`;
-            
+            document.getElementById('total-matches').textContent = total; document.getElementById('won-matches').textContent = won; document.getElementById('lost-matches').textContent = lost; document.getElementById('draw-matches').textContent = drawCount; document.getElementById('zero-zero-matches').textContent = zeroZero; document.getElementById('win-rate').textContent = `${winRate.toFixed(1)}%`;
             const winRateNo00Card = document.getElementById('win-rate-no-00-card');
-            if (tipToAnalyze === '0,5HT') {
-                winRateNo00Card.classList.remove('hidden');
-                const non00 = matches.filter(m => m.risultato.trim() !== '0-0');
-                const wonNon00 = non00.filter(m => evaluateVirtualTip(m, '0,5HT')).length;
-                const wrNo00 = non00.length > 0 ? (wonNon00 / non00.length * 100) : 0;
-                document.getElementById('win-rate-no-00').textContent = `${wrNo00.toFixed(1)}%`;
-            } else {
-                winRateNo00Card.classList.add('hidden');
-            }
+            if (tipToAnalyze === '0,5HT') { winRateNo00Card.classList.remove('hidden'); const non00 = matches.filter(m => m.risultato.trim() !== '0-0'); const wonNon00 = non00.filter(m => evaluateVirtualTip(m, '0,5HT')).length; const wrNo00 = non00.length > 0 ? (wonNon00 / non00.length * 100) : 0; document.getElementById('win-rate-no-00').textContent = `${wrNo00.toFixed(1)}%`;
+            } else { winRateNo00Card.classList.add('hidden'); }
         }
-
         function renderMatchesTable(matches, tipToAnalyze) {
-            const tbody = document.getElementById('matches-table-body'), noMatchesEl = document.getElementById('no-matches-found');
-            noMatchesEl.classList.toggle('hidden', matches.length > 0);
+            const tbody = document.getElementById('matches-table-body'), noMatchesEl = document.getElementById('no-matches-found'); noMatchesEl.classList.toggle('hidden', matches.length > 0);
             if(matches.length === 0) { tbody.innerHTML = ''; return; }
             matches.sort((a, b) => b.data.localeCompare(a.data));
-            tbody.innerHTML = matches.map(m => {
-                const isWin = evaluateVirtualTip(m, tipToAnalyze);
-                return `<tr class="hover:bg-gray-50"><td class="px-4 py-2">${m.data}</td><td class="px-4 py-2 text-gray-500">${m.lega}</td><td class="px-4 py-2 font-medium">${m.partita}</td><td class="px-4 py-2 text-gray-400">${m.tip}</td><td class="px-4 py-2 text-center">${m.risultato}</td><td class="px-4 py-2 text-center">${m.probabilita.toFixed(0)}%</td><td class="px-4 py-2 text-center">${m.quota.toFixed(2)}</td><td class="px-4 py-2 text-center"><span class="px-2 py-1 text-xs font-semibold rounded-full ${isWin ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${isWin ? 'VINTA' : 'PERSA'}</span></td></tr>`;
-            }).join('');
+            tbody.innerHTML = matches.map(m => { const isWin = evaluateVirtualTip(m, tipToAnalyze); return `<tr class="hover:bg-gray-50"><td class="px-4 py-2">${m.data}</td><td class="px-4 py-2 text-gray-500">${m.lega}</td><td class="px-4 py-2 font-medium">${m.partita}</td><td class="px-4 py-2 text-gray-400">${m.tip}</td><td class="px-4 py-2 text-center">${m.risultato}</td><td class="px-4 py-2 text-center">${m.probabilita.toFixed(0)}%</td><td class="px-4 py-2 text-center">${m.quota.toFixed(2)}</td><td class="px-4 py-2 text-center"><span class="px-2 py-1 text-xs font-semibold rounded-full ${isWin ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${isWin ? 'VINTA' : 'PERSA'}</span></td></tr>`; }).join('');
         }
         
         // --- UI & FILTERS SETUP ---
         const continentMap = { 'EU': 'Europa', 'AS': 'Asia', 'AF': 'Africa', 'SA': 'Sud America', 'NA': 'Nord America', 'AU': 'Oceania' };
         function updateFiltersUI() {
             const container = document.getElementById('leagues-filter-container'); if (!container || allMatches.length === 0) return;
-            const favorites = getFavorites(); const allUniqueLeagues = [...new Set(allMatches.map(m => m.lega))]; const nonFavoriteLeagues = allUniqueLeagues.filter(l => !favorites.includes(l));
+            const favorites = userPreferences.favorites || []; const allUniqueLeagues = [...new Set(allMatches.map(m => m.lega))]; const nonFavoriteLeagues = allUniqueLeagues.filter(l => !favorites.includes(l));
             const grouped = nonFavoriteLeagues.sort().reduce((acc, l) => { const pre = l.split('-')[0].trim().toUpperCase(); const cont = continentMap[pre] || 'Altro'; if (!acc[cont]) acc[cont] = []; acc[cont].push(l); return acc; }, {});
             const groupId_favs = "favorites"; let leaguesHTML = `<div class="space-y-2"><div class="flex items-center justify-between"><h4 class="font-semibold text-gray-700">Preferiti</h4><div class="flex items-center gap-2"><button id="update-favorites-btn" class="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2 py-1 rounded hover:bg-indigo-200">Aggiorna</button><label class="flex items-center text-xs text-indigo-600 cursor-pointer hover:underline"><input type="checkbox" class="select-all-leagues h-4 w-4 rounded" data-group="${groupId_favs}"><span class="ml-1">Tutti</span></label></div></div><div class="space-y-1 h-56 overflow-y-auto pr-2" data-group-container="${groupId_favs}">${favorites.length>0?favorites.sort().map(l=>renderLeagueCheckbox(l)).join(''):`<p class="text-xs text-gray-400">Aggiungi leghe con la stella.</p>`}</div></div>`;
             ['Europa', 'Sud America', 'Asia', 'Africa', 'Nord America', 'Oceania', 'Altro'].forEach(cont => { if (grouped[cont]) { const groupId = cont.replace(/\s+/g, '-'); leaguesHTML += `<details class="space-y-2" open><summary class="font-semibold text-gray-700 cursor-pointer flex items-center justify-between"><span>${cont}</span><label class="flex items-center text-xs text-indigo-600 cursor-pointer hover:underline" onclick="event.stopPropagation()"><input type="checkbox" class="select-all-leagues h-4 w-4 rounded" data-group="${groupId}"><span class="ml-1">Tutti</span></label></summary><div class="space-y-1 h-56 overflow-y-auto pr-2 border-t mt-2 pt-2" data-group-container="${groupId}">${grouped[cont].map(l => renderLeagueCheckbox(l)).join('')}</div></details>`; } });
@@ -267,7 +295,7 @@
             container.querySelectorAll('.select-all-leagues').forEach(cb => { cb.addEventListener('change', (e) => { const group = e.target.dataset.group; const isChecked = e.target.checked; container.querySelectorAll(`[data-group-container="${group}"] input[type="checkbox"]`).forEach(leagueCb => leagueCb.checked = isChecked); applyAndRender(); }); });
             container.querySelectorAll('.star-icon').forEach(el => el.addEventListener('click', (e) => toggleFavorite(e, e.currentTarget.dataset.league)));
         }
-        function renderLeagueCheckbox(league) { const isFav = getFavorites().includes(league); return `<div class="flex items-center justify-between"><div class="flex items-center"><input id="l_${league}" type="checkbox" value="${league}" class="h-4 w-4 rounded border-gray-300 text-indigo-600"><label for="l_${league}" class="ml-2 text-sm text-gray-600">${league}</label></div><svg data-league="${league}" class="star-icon w-5 h-5 text-gray-400 ${isFav ? 'favorited' : ''}" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg></div>`; }
+        function renderLeagueCheckbox(league) { const isFav = (userPreferences.favorites || []).includes(league); return `<div class="flex items-center justify-between"><div class="flex items-center"><input id="l_${league}" type="checkbox" value="${league}" class="h-4 w-4 rounded border-gray-300 text-indigo-600"><label for="l_${league}" class="ml-2 text-sm text-gray-600">${league}</label></div><svg data-league="${league}" class="star-icon w-5 h-5 text-gray-400 ${isFav ? 'favorited' : ''}" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg></div>`; }
         function resetFilters() { ['start-date-filter','end-date-filter','tip-filter','prob-min-filter','prob-max-filter','odds-min-filter','odds-max-filter'].forEach(id => document.getElementById(id).value = ''); document.querySelectorAll('#leagues-filter-container input:checked').forEach(el => el.checked = false); applyAndRender(); }
         
         // --- PREDICTIONS LOGIC ---
@@ -284,14 +312,14 @@
         }
         function populateStrategyDropdown() {
             const select = document.getElementById('strategy-select');
-            const strategies = getStrategies();
+            const strategies = userPreferences.strategies || [];
             select.innerHTML = '<option value="">Scegli una strategia...</option>' + strategies.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
         }
         function applyStrategy() {
             const strategyName = document.getElementById('strategy-select').value;
             if (!strategyName) { showToast("Scegli una strategia dall'elenco.", "error"); return; }
             if (futureMatches.length === 0) { showToast("Carica prima un file di partite future.", "error"); return; }
-            const strategy = getStrategies().find(s => s.name === strategyName);
+            const strategy = (userPreferences.strategies || []).find(s => s.name === strategyName);
             if (!strategy) { showToast("Strategia non trovata.", "error"); return; }
 
             const filters = strategy.filters;
@@ -323,7 +351,7 @@
             document.getElementById('save-strategy-btn').addEventListener('click', saveStrategy);
             document.getElementById('csv-file-future').addEventListener('change', handleFutureFileUpload);
             document.getElementById('apply-strategy-btn').addEventListener('click', applyStrategy);
-            fetchAllMatches();
+            fetchAllData();
         }
         function initializeFirebase() { try { const config = (window.__firebase_config?.projectId) ? (typeof window.__firebase_config === 'string' ? JSON.parse(window.__firebase_config) : window.__firebase_config) : userFirebaseConfig; if (!config || !config.projectId) throw new Error("Config Firebase non valida."); app = initializeApp(config); db = getFirestore(app); runAppLogic(); } catch (e) { console.error(e); document.getElementById('loading-view').innerHTML = `<div class="text-center text-red-500"><h1 class="text-2xl">Errore Configurazione</h1><p>Impossibile connettersi al DB.<br>Messaggio: ${e.message}</p></div>`; } }
         document.addEventListener('DOMContentLoaded', initializeFirebase);
